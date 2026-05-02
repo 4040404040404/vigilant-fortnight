@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.26;
 
-// Uniswap V4 PoolManager on Ethereum mainnet
-address constant POOL_MANAGER = 0x000000000004444c5dc75cB358380D2e3dE08A90;
+// Uniswap V4 PoolManager on Ethereum sepolia
+address constant POOL_MANAGER = 0xE03A1074c86CFeDd5C142C4F04F1a1536e203543;
 
 // Sqrt price limits used when no explicit limit is desired
 uint160 constant MIN_SQRT_PRICE = 4295128739;
