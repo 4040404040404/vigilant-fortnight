@@ -8,9 +8,12 @@ address constant POOL_MANAGER = 0x000000000004444c5dc75cB358380D2e3dE08A90;
 /// @dev V4 flash loans are fee-free; this contract executes optional arbitrary logic then repays
 contract FlashExecutor is IUnlockCallback {
     IPoolManager public immutable poolManager;
+    bool private inExecution;
 
     error NotPoolManager();
+    error ExecutionInProgress();
     error InvalidNativeValue();
+    error InvalidTargetValue();
     error InsufficientRepayment();
     error ExternalCallFailed();
     error ERC20TransferFailed();
@@ -32,7 +35,9 @@ contract FlashExecutor is IUnlockCallback {
         uint256 targetValue,
         bytes calldata callData
     ) external payable {
+        if (inExecution) revert ExecutionInProgress();
         if (token != address(0) && msg.value != 0) revert InvalidNativeValue();
+        if (token != address(0) && targetValue != 0) revert InvalidTargetValue();
 
         Currency currency = Currency.wrap(token);
         bytes memory callbackData = abi.encode(
@@ -46,11 +51,14 @@ contract FlashExecutor is IUnlockCallback {
             })
         );
 
+        inExecution = true;
         poolManager.unlock(callbackData);
+        inExecution = false;
     }
 
     /// @notice Compatibility wrapper with previous interface
     function flash(Currency currency, uint256 amount, bytes calldata data) external {
+        if (inExecution) revert ExecutionInProgress();
         bytes memory callbackData = abi.encode(
             FlashParams({
                 currency: currency,
@@ -61,7 +69,9 @@ contract FlashExecutor is IUnlockCallback {
                 callData: data
             })
         );
+        inExecution = true;
         poolManager.unlock(callbackData);
+        inExecution = false;
     }
 
     /// @notice Callback from PoolManager
@@ -71,10 +81,17 @@ contract FlashExecutor is IUnlockCallback {
         returns (bytes memory)
     {
         if (msg.sender != address(poolManager)) revert NotPoolManager();
+        if (!inExecution) revert ExecutionInProgress();
 
         FlashParams memory params = abi.decode(callbackData, (FlashParams));
+        uint256 balanceBefore;
 
         // Take tokens from the pool (creates a debt)
+        if (isNative(params.currency)) {
+            balanceBefore = address(this).balance;
+        } else {
+            balanceBefore = IERC20(Currency.unwrap(params.currency)).balanceOf(address(this));
+        }
         poolManager.take(params.currency, address(this), params.amount);
 
         if (params.target != address(0)) {
@@ -85,20 +102,27 @@ contract FlashExecutor is IUnlockCallback {
         // For ERC20: transfer tokens to PoolManager, then settle
         if (!isNative(params.currency)) {
             address token = Currency.unwrap(params.currency);
-            uint256 balance = IERC20(token).balanceOf(address(this));
-            if (balance < params.amount) revert InsufficientRepayment();
+            uint256 balanceAfterExecution = IERC20(token).balanceOf(address(this));
+            if (balanceAfterExecution < balanceBefore + params.amount) {
+                revert InsufficientRepayment();
+            }
 
             _safeTransfer(token, address(poolManager), params.amount);
             poolManager.settle(params.currency);
 
-            uint256 profit = IERC20(token).balanceOf(address(this));
+            uint256 finalBalance = IERC20(token).balanceOf(address(this));
+            uint256 profit = finalBalance > balanceBefore ? finalBalance - balanceBefore : 0;
             if (profit > 0) _safeTransfer(token, params.sender, profit);
         } else {
             // For native ETH: settle with value
-            if (address(this).balance < params.amount) revert InsufficientRepayment();
+            uint256 balanceAfterExecution = address(this).balance;
+            if (balanceAfterExecution < balanceBefore + params.amount) {
+                revert InsufficientRepayment();
+            }
             poolManager.settle{value: params.amount}(params.currency);
 
-            uint256 profitNative = address(this).balance;
+            uint256 finalBalance = address(this).balance;
+            uint256 profitNative = finalBalance > balanceBefore ? finalBalance - balanceBefore : 0;
             if (profitNative > 0) {
                 (bool sent,) = payable(params.sender).call{value: profitNative}("");
                 if (!sent) revert ExternalCallFailed();
