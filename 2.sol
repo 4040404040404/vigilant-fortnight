@@ -4,39 +4,67 @@ pragma solidity ^0.8.26;
 // Uniswap V4 PoolManager on Ethereum mainnet
 address constant POOL_MANAGER = 0x000000000004444c5dc75cB358380D2e3dE08A90;
 
-/// @notice Example of flash loans on Uniswap V4
-/// @dev V4 flash loans are FREE due to flash accounting - no fees!
-/// Borrow tokens during unlock callback, repay before callback ends
-contract UniswapV4Flash is IUnlockCallback {
+/// @notice Flash executor users can interact with directly after deployment
+/// @dev V4 flash loans are fee-free; this contract executes optional arbitrary logic then repays
+contract FlashExecutor is IUnlockCallback {
     IPoolManager public immutable poolManager;
 
     error NotPoolManager();
-    error FlashLoanFailed();
+    error InvalidNativeValue();
+    error InsufficientRepayment();
+    error ExternalCallFailed();
+    error ERC20TransferFailed();
 
     constructor() {
         poolManager = IPoolManager(POOL_MANAGER);
     }
 
-    /// @notice Execute a flash loan
-    /// @param currency The token to borrow (use address(0) for native ETH)
+    /// @notice Execute a flash loan with optional arbitrary call during callback
+    /// @param token Token to borrow (address(0) for native ETH)
     /// @param amount Amount to borrow
-    /// @param data Arbitrary data to pass to your flash loan logic
-    function flash(Currency currency, uint256 amount, bytes calldata data)
-        external
-    {
+    /// @param target Optional contract to call during flash execution
+    /// @param targetValue Native ETH value to pass to target call
+    /// @param callData Calldata for the optional target call
+    function executeFlashLoan(
+        address token,
+        uint256 amount,
+        address target,
+        uint256 targetValue,
+        bytes calldata callData
+    ) external payable {
+        if (token != address(0) && msg.value != 0) revert InvalidNativeValue();
+
+        Currency currency = Currency.wrap(token);
         bytes memory callbackData = abi.encode(
             FlashParams({
                 currency: currency,
                 amount: amount,
                 sender: msg.sender,
-                data: data
+                target: target,
+                targetValue: targetValue,
+                callData: callData
             })
         );
 
         poolManager.unlock(callbackData);
     }
 
-    /// @notice Callback from PoolManager - execute flash loan logic here
+    /// @notice Compatibility wrapper with previous interface
+    function flash(Currency currency, uint256 amount, bytes calldata data) external {
+        bytes memory callbackData = abi.encode(
+            FlashParams({
+                currency: currency,
+                amount: amount,
+                sender: msg.sender,
+                target: address(0),
+                targetValue: 0,
+                callData: data
+            })
+        );
+        poolManager.unlock(callbackData);
+    }
+
+    /// @notice Callback from PoolManager
     function unlockCallback(bytes calldata callbackData)
         external
         override
@@ -49,42 +77,44 @@ contract UniswapV4Flash is IUnlockCallback {
         // Take tokens from the pool (creates a debt)
         poolManager.take(params.currency, address(this), params.amount);
 
-        // ============================================
-        // Your flash loan logic goes here!
-        // You now have the borrowed tokens to use
-        // ============================================
-
-        // Example: call custom logic
-        _executeFlashLoanLogic(params.currency, params.amount, params.data);
-
-        // ============================================
-        // Repay the flash loan
-        // ============================================
+        if (params.target != address(0)) {
+            (bool success,) = params.target.call{value: params.targetValue}(params.callData);
+            if (!success) revert ExternalCallFailed();
+        }
 
         // For ERC20: transfer tokens to PoolManager, then settle
         if (!isNative(params.currency)) {
-            IERC20(Currency.unwrap(params.currency)).transfer(
-                address(poolManager),
-                params.amount
-            );
+            address token = Currency.unwrap(params.currency);
+            uint256 balance = IERC20(token).balanceOf(address(this));
+            if (balance < params.amount) revert InsufficientRepayment();
+
+            _safeTransfer(token, address(poolManager), params.amount);
             poolManager.settle(params.currency);
+
+            uint256 profit = IERC20(token).balanceOf(address(this));
+            if (profit > 0) _safeTransfer(token, params.sender, profit);
         } else {
             // For native ETH: settle with value
+            if (address(this).balance < params.amount) revert InsufficientRepayment();
             poolManager.settle{value: params.amount}(params.currency);
+
+            uint256 profitNative = address(this).balance;
+            if (profitNative > 0) {
+                (bool sent,) = payable(params.sender).call{value: profitNative}("");
+                if (!sent) revert ExternalCallFailed();
+            }
         }
 
-        // No fees! Delta is now zero, unlock will succeed
         return bytes("");
     }
 
-    /// @notice Override this to implement your flash loan logic
-    function _executeFlashLoanLogic(
-        Currency currency,
-        uint256 amount,
-        bytes memory data
-    ) internal virtual {
-        // Example: arbitrage, liquidation, collateral swap, etc.
-        // The borrowed tokens are in this contract
+    function _safeTransfer(address token, address to, uint256 amount) internal {
+        (bool success, bytes memory result) = token.call(
+            abi.encodeWithSelector(IERC20.transfer.selector, to, amount)
+        );
+        if (!success || (result.length != 0 && !abi.decode(result, (bool)))) {
+            revert ERC20TransferFailed();
+        }
     }
 
     function isNative(Currency currency) internal pure returns (bool) {
@@ -98,7 +128,9 @@ contract UniswapV4Flash is IUnlockCallback {
         Currency currency;
         uint256 amount;
         address sender;
-        bytes data;
+        address target;
+        uint256 targetValue;
+        bytes callData;
     }
 }
 
@@ -129,4 +161,3 @@ interface IERC20 {
         returns (bool);
     function balanceOf(address account) external view returns (uint256);
 }
-
