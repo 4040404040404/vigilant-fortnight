@@ -1,0 +1,84 @@
+[
+  {
+    "type": "function",
+    "name": "execute",
+    "stateMutability": "external",
+    "inputs": [
+      {
+        "name": "flashCurrency",
+        "type": "address",
+        "internalType": "Currency"
+      },
+      {
+        "name": "flashAmount",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "steps",
+        "type": "tuple[]",
+        "internalType": "struct FlashExecutor.SwapStep[]",
+        "components": [
+          {
+            "name": "key",
+            "type": "tuple",
+            "internalType": "struct PoolKey",
+            "components": [
+              {
+                "name": "currency0",
+                "type": "address",
+                "internalType": "Currency"
+              },
+              {
+                "name": "currency1",
+                "type": "address",
+                "internalType": "Currency"
+              },
+              {
+                "name": "fee",
+                "type": "uint24",
+                "internalType": "uint24"
+              },
+              {
+                "name": "tickSpacing",
+                "type": "int24",
+                "internalType": "int24"
+              },
+              {
+                "name": "hooks",
+                "type": "address",
+                "internalType": "address"
+              }
+            ]
+          },
+          {
+            "name": "zeroForOne",
+            "type": "bool",
+            "internalType": "bool"
+          },
+          {
+            "name": "amountIn",
+            "type": "uint128",
+            "internalType": "uint128"
+          },
+          {
+            "name": "minAmountOut",
+            "type": "uint128",
+            "internalType": "uint128"
+          }
+        ]
+      },
+      {
+        "name": "minProfit",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "recipient",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": []
+  }
+]
