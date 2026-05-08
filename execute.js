@@ -6,10 +6,20 @@ const path = require("path");
 const { ethers } = require("ethers");
 
 const ROOT = __dirname;
-const ABI_PATH = path.join(ROOT, "FlashExecutor.abi.json");
+const ABI_CANDIDATES = [
+  path.join(ROOT, "FlashExecutor.abi.json"),
+  path.join(ROOT, "flashexecutor.abi.json"),
+];
 
 function readJson(filePath) {
   return JSON.parse(fs.readFileSync(filePath, "utf8"));
+}
+
+function loadAbi() {
+  for (const abiPath of ABI_CANDIDATES) {
+    if (fs.existsSync(abiPath)) return readJson(abiPath);
+  }
+  throw new Error("ABI file not found. Expected FlashExecutor.abi.json.");
 }
 
 function asBigInt(value, field) {
@@ -81,7 +91,7 @@ async function main() {
 
   const provider = new ethers.JsonRpcProvider(rpcUrl);
   const wallet = new ethers.Wallet(privateKey, provider);
-  const abi = readJson(ABI_PATH);
+  const abi = loadAbi();
   const executor = new ethers.Contract(executorAddress, abi, wallet);
   const params = loadConfig();
 

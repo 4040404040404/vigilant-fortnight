@@ -26,7 +26,7 @@ If you have an artifact with `abi` + `bytecode`:
 export RPC_URL="https://your-rpc"
 export PRIVATE_KEY="0x..."
 export CONTRACT_ARTIFACT_PATH="./artifacts/FlashExecutor.json"
-node /home/runner/work/vigilant-fortnight/vigilant-fortnight/deploy.js
+node deploy.js
 ```
 
 ### Option B: Deploy from ABI file + env bytecode
@@ -35,7 +35,7 @@ node /home/runner/work/vigilant-fortnight/vigilant-fortnight/deploy.js
 export RPC_URL="https://your-rpc"
 export PRIVATE_KEY="0x..."
 export FLASH_EXECUTOR_BYTECODE="0x6080..." # compiled bytecode
-node /home/runner/work/vigilant-fortnight/vigilant-fortnight/deploy.js
+node deploy.js
 ```
 
 Save the deployed address for execution:
@@ -90,7 +90,7 @@ export RPC_URL="https://your-rpc"
 export PRIVATE_KEY="0x..."
 export EXECUTOR_ADDRESS="0xYourDeployedExecutor"
 export EXECUTE_CONFIG_PATH="./execute.config.json"
-node /home/runner/work/vigilant-fortnight/vigilant-fortnight/execute.js
+node execute.js
 ```
 
 Optional:
