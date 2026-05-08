@@ -97,17 +97,24 @@ async function main() {
   if (process.env.VALUE) txOverrides.value = asBigInt(process.env.VALUE, "VALUE");
 
   console.log("Sending execute() transaction...");
-  const tx = await executor.execute(
+  const executeArgs = [
     params.flashCurrency,
     params.flashAmount,
     params.steps,
     params.minProfit,
     params.recipient,
-    txOverrides
-  );
+  ];
+  if (Object.keys(txOverrides).length > 0) {
+    executeArgs.push(txOverrides);
+  }
+  const tx = await executor.execute(...executeArgs);
   console.log(`Tx hash: ${tx.hash}`);
 
-  const confirmations = Number(process.env.WAIT_CONFIRMATIONS || "1");
+  const confirmationsRaw = process.env.WAIT_CONFIRMATIONS || "1";
+  const confirmations = Number.parseInt(confirmationsRaw, 10);
+  if (!Number.isInteger(confirmations) || confirmations < 1) {
+    throw new Error("WAIT_CONFIRMATIONS must be a positive integer.");
+  }
   const receipt = await tx.wait(confirmations);
   console.log(`Mined in block: ${receipt.blockNumber}`);
   console.log(`Status: ${receipt.status === 1 ? "success" : "failed"}`);
