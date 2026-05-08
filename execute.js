@@ -7,7 +7,6 @@ const { ethers } = require("ethers");
 
 const ROOT = __dirname;
 const PRIMARY_ABI_PATH = path.join(ROOT, "FlashExecutor.abi.json");
-const LOWERCASE_ABI_PATH = path.join(ROOT, "flashexecutor.abi.json");
 
 function readJson(filePath) {
   return JSON.parse(fs.readFileSync(filePath, "utf8"));
@@ -15,7 +14,6 @@ function readJson(filePath) {
 
 function loadAbi() {
   if (fs.existsSync(PRIMARY_ABI_PATH)) return readJson(PRIMARY_ABI_PATH);
-  if (fs.existsSync(LOWERCASE_ABI_PATH)) return readJson(LOWERCASE_ABI_PATH);
   throw new Error("ABI file not found. Expected FlashExecutor.abi.json.");
 }
 
@@ -28,7 +26,7 @@ function asBigInt(value, field) {
 }
 
 function assertAddress(value, field, allowZero = false) {
-  const isZero = value === "0x0000000000000000000000000000000000000000";
+  const isZero = value === ethers.ZeroAddress;
   if (!ethers.isAddress(value) || (!allowZero && isZero)) {
     throw new Error(`Invalid address for ${field}: ${value}`);
   }
@@ -112,7 +110,7 @@ async function main() {
 
   const confirmationsRaw = process.env.WAIT_CONFIRMATIONS || "1";
   const confirmations = Number.parseInt(confirmationsRaw, 10);
-  if (!Number.isInteger(confirmations) || confirmations < 1) {
+  if (Number.isNaN(confirmations) || confirmations < 1) {
     throw new Error("WAIT_CONFIRMATIONS must be a positive integer.");
   }
   const receipt = await tx.wait(confirmations);
