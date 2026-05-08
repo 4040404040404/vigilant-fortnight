@@ -6,19 +6,16 @@ const path = require("path");
 const { ethers } = require("ethers");
 
 const ROOT = __dirname;
-const ABI_CANDIDATES = [
-  path.join(ROOT, "FlashExecutor.abi.json"),
-  path.join(ROOT, "flashexecutor.abi.json"),
-];
+const PRIMARY_ABI_PATH = path.join(ROOT, "FlashExecutor.abi.json");
+const LEGACY_ABI_PATH = path.join(ROOT, "flashexecutor.abi.json");
 
 function readJson(filePath) {
   return JSON.parse(fs.readFileSync(filePath, "utf8"));
 }
 
 function loadAbi() {
-  for (const abiPath of ABI_CANDIDATES) {
-    if (fs.existsSync(abiPath)) return readJson(abiPath);
-  }
+  if (fs.existsSync(PRIMARY_ABI_PATH)) return readJson(PRIMARY_ABI_PATH);
+  if (fs.existsSync(LEGACY_ABI_PATH)) return readJson(LEGACY_ABI_PATH);
   throw new Error("ABI file not found. Expected FlashExecutor.abi.json.");
 }
 

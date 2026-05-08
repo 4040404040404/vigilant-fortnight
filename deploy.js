@@ -50,6 +50,8 @@ async function main() {
   const deployTx = contract.deploymentTransaction();
   if (deployTx) {
     console.log(`Deployment tx: ${deployTx.hash}`);
+  } else {
+    console.log("Deployment transaction hash unavailable from provider.");
   }
 
   await contract.waitForDeployment();
